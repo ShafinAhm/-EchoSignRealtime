@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoSign - Gesture Recognition</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                    <path d="M16 4L4 10V22L16 28L28 22V10L16 4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <circle cx="16" cy="16" r="4" fill="currentColor"/>
+                </svg>
+                <h1>EchoSign</h1>
+            </div>
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section class="gesture-display">
+                <div class="gesture-card">
+                    <div class="gesture-label">Current Gesture</div>
+                    <div class="gesture-name" id="gestureName">—</div>
+                    <div class="gesture-confidence">
+                        <span>Confidence</span>
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" id="confidenceFill"></div>
+                        </div>
+                        <span id="confidenceValue">—</span>
+                    </div>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Motion (GDP)</div>
+                        <div class="metric-value" id="gdpValue">—</div>
+                        <div class="metric-bar">
+                            <div class="metric-fill" id="gdpBar"></div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Samples</div>
+                        <div class="metric-value" id="sampleCount">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Predictions/sec</div>
+                        <div class="metric-value" id="predRate">0</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sensor-panel">
+                <h2 class="section-title">Flex Sensors</h2>
+                <div class="sensors-grid">
+                    <div class="sensor-item">
+                        <label>Thumb</label>
+                        <div class="sensor-bar">
+                            <div class="sensor-fill" id="thumbBar"></div>
+                        </div>
+                        <span id="thumbVal">—</span>
+                    </div>
+                    <div class="sensor-item">
+                        <label>Index</label>
+                        <div class="sensor-bar">
+                            <div class="sensor-fill" id="indexBar"></div>
+                        </div>
+                        <span id="indexVal">—</span>
+                    </div>
+                    <div class="sensor-item">
+                        <label>Middle</label>
+                        <div class="sensor-bar">
+                            <div class="sensor-fill" id="middleBar"></div>
+                        </div>
+                        <span id="middleVal">—</span>
+                    </div>
+                    <div class="sensor-item">
+                        <label>Ring</label>
+                        <div class="sensor-bar">
+                            <div class="sensor-fill" id="ringBar"></div>
+                        </div>
+                        <span id="ringVal">—</span>
+                    </div>
+                    <div class="sensor-item">
+                        <label>Pinky</label>
+                        <div class="sensor-bar">
+                            <div class="sensor-fill" id="pinkyBar"></div>
+                        </div>
+                        <span id="pinkyVal">—</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="imu-panel">
+                <h2 class="section-title">IMU Data</h2>
+                <div class="imu-grid">
+                    <div class="imu-group">
+                        <h3>Accelerometer (g)</h3>
+                        <div class="imu-values">
+                            <div class="imu-item">
+                                <span class="imu-axis">X</span>
+                                <span id="accelX">—</span>
+                            </div>
+                            <div class="imu-item">
+                                <span class="imu-axis">Y</span>
+                                <span id="accelY">—</span>
+                            </div>
+                            <div class="imu-item">
+                                <span class="imu-axis">Z</span>
+                                <span id="accelZ">—</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="imu-group">
+                        <h3>Gyroscope (°/s)</h3>
+                        <div class="imu-values">
+                            <div class="imu-item">
+                                <span class="imu-axis">X</span>
+                                <span id="gyroX">—</span>
+                            </div>
+                            <div class="imu-item">
+                                <span class="imu-axis">Y</span>
+                                <span id="gyroY">—</span>
+                            </div>
+                            <div class="imu-item">
+                                <span class="imu-axis">Z</span>
+                                <span id="gyroZ">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="history-panel">
+                <h2 class="section-title">Recent Gestures</h2>
+                <div class="history-list" id="historyList">
+                    <div class="history-empty">Waiting for gestures...</div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <span>EchoSign Realtime v1.0</span>
+            <span>•</span>
+            <span id="deviceInfo">ESP32</span>
+        </footer>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>
