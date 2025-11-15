@@ -1,7 +1,15 @@
 #pragma once
 #include <Arduino.h>
+#include "sentence_label_names.h"
 #include "sentence_scaler_params.h"
-#include "sentence_knn_model.h"
+
+// Forward declare training data (defined in sentence_knn_model.cpp)
+extern const float SENTENCE_TRAINING_DATA[];
+extern const uint8_t SENTENCE_TRAINING_LABELS[];
+
+#define SENTENCE_KNN_N_NEIGHBORS 3
+#define SENTENCE_KNN_N_SAMPLES 39
+#define SENTENCE_KNN_N_FEATURES 960
 
 /**
  * Sentence Predictor
@@ -177,17 +185,15 @@ private:
 
     // Find K nearest neighbors
     for (int i = 0; i < N; i++) {
-      // Calculate Euclidean distance
+      // Calculate Manhattan distance (must match training)
       float dist = 0.0f;
       
       for (int d = 0; d < D; d++) {
         // Read from PROGMEM (training data is stored in flash)
         float train_val = pgm_read_float(&SENTENCE_TRAINING_DATA[i * D + d]);
         float diff = query[d] - train_val;
-        dist += diff * diff;
+        dist += fabsf(diff);  // Manhattan distance: sum of absolute differences
       }
-      
-      dist = sqrtf(dist);
 
       // Insert into K nearest if closer than current worst
       if (dist < nearestDist[K-1]) {
@@ -204,12 +210,13 @@ private:
         }
         
         nearestDist[pos] = dist;
-        nearestLabels[pos] = SENTENCE_TRAINING_LABELS[i];
+        nearestLabels[pos] = pgm_read_byte(&SENTENCE_TRAINING_LABELS[i]);
       }
     }
 
     // Vote among K nearest neighbors
-    uint8_t votes[SENTENCE_NUM_CLASSES] = {0};
+    const int numClasses = SENTENCE_NUM_CLASSES;
+    uint8_t votes[numClasses] = {0};
     for (int i = 0; i < K; i++) {
       votes[nearestLabels[i]]++;
     }
@@ -217,7 +224,7 @@ private:
     // Find label with most votes
     uint8_t bestLabel = 0;
     uint8_t maxVotes = 0;
-    for (int i = 0; i < SENTENCE_NUM_CLASSES; i++) {
+    for (int i = 0; i < numClasses; i++) {
       if (votes[i] > maxVotes) {
         maxVotes = votes[i];
         bestLabel = i;

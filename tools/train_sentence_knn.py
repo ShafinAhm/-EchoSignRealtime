@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 EchoSign – Sentence KNN Trainer
 --------------------------------
@@ -395,7 +394,7 @@ def main() -> None:
     # Train KNN with grid search
     print("\nTraining KNN model (this may take a minute)...")
     param_grid = {
-        'n_neighbors': [1, 3, 5, 7],
+        'n_neighbors': [3],  # Force K=3 for better generalization
         'weights': ['uniform', 'distance'],
         'metric': ['euclidean', 'manhattan']
     }

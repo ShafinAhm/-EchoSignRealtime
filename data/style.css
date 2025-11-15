@@ -208,12 +208,38 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.gesture-label {
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    opacity: 0.9;
-    margin-bottom: 1rem;
+.mode-toggle {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    justify-content: center;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 0.875rem 1.5rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+}
+
+.mode-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.mode-btn.active {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .gesture-name {
@@ -248,9 +274,85 @@ body {
     height: 100%;
     background: linear-gradient(90deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 1) 100%);
     border-radius: 4px;
-    transition: width 0.3s ease;
-    width: 0%;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+@keyframes pulse-recording {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    50% { opacity: 0.8; box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+}
+
+/* Debug Log Panel */
+.debug-log {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 20px;
+    max-height: 200px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.debug-log-header {
+    color: rgba(139, 92, 246, 0.9);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.debug-log-content {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.7);
+    overflow-y: auto;
+    flex: 1;
+    max-height: 150px;
+}
+
+.debug-log-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.debug-log-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.debug-log-content::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.4);
+    border-radius: 3px;
+}
+
+.debug-log-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.6);
+}
+
+.log-entry {
+    margin-bottom: 4px;
+    padding: 2px 0;
+}
+
+.log-entry.sentence {
+    color: rgba(168, 85, 247, 1);
+    font-weight: 600;
+}
+
+.log-entry.gesture {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.log-entry.command {
+    color: rgba(34, 211, 238, 1);
+    font-weight: 600;
+}
+
+.log-entry.error {
+    color: rgba(239, 68, 68, 1);
+    font-weight: 600;
 }
 
 /* Metrics Grid */

@@ -2,14 +2,10 @@
 #include "Calib.h"
 #include "predictor.h"
 
-// Check if sentence model files exist
-#if __has_include("sentence_knn_model.h")
-  #define SENTENCE_MODE_AVAILABLE 1
-  #include "sentence_predictor.h"
-  #include "sentence_label_names.h"
-#else
-  #define SENTENCE_MODE_AVAILABLE 0
-#endif
+// Force enable sentence mode (files verified to exist)
+#define SENTENCE_MODE_AVAILABLE 1
+#include "sentence_predictor.h"
+#include "sentence_label_names.h"
 
 // -------------------- CONFIG --------------------
 
@@ -20,14 +16,14 @@
 // Prediction modes (only used when RUN_MODE == 1)
 // 0 = GESTURE MODE (instant gestures)
 // 1 = SENTENCE MODE (3-second windows)
-// 2 = AUTO MODE (gesture by default, sentence when button pressed)
+// 2 = AUTO MODE (gesture by default, sentence via web UI command)
 #define PREDICTION_MODE 2
 
 GlovePredictor predictor;
-
-#if SENTENCE_MODE_AVAILABLE && RUN_MODE == 1
 SentencePredictor sentencePredictor;
-#endif
+
+// Include sentence training data directly into main.cpp to prevent linker from stripping it
+#include "sentence_knn_model.cpp"
 
 // Simple timer for collection loop
 uint32_t lastPrintMs = 0;
@@ -74,16 +70,44 @@ static void signalSentenceComplete() {
 }
 
 static void handleSerialCommands() {
-  // We expect single-character commands from PC:
-  // 'S' = start recording, 'E' = end recording
+  // We expect text commands like "START_SENTENCE"
+  static String cmdBuffer = "";
+  
   while (Serial.available() > 0) {
     char c = (char)Serial.read();
-    if (c == 'S') {
-      gRecordingActive = true;
-      signalRecordingStart();
-    } else if (c == 'E') {
-      gRecordingActive = false;
-      signalRecordingStop();
+    
+    if (c == '\n') {
+      // Check for text commands
+      cmdBuffer.trim();
+      
+#if SENTENCE_MODE_AVAILABLE
+#if RUN_MODE == 1
+      if (cmdBuffer == "START_SENTENCE") {
+        Serial.println("{\"debug\":\"Command received: START_SENTENCE\"}");
+        if (!sentencePredictor.recording()) {
+          sentenceModeActive = true;
+          sentencePredictor.startRecording();
+          signalSentenceStart();
+          Serial.println("{\"event\":\"sentence_start\",\"recording\":true}");
+        } else {
+          Serial.println("{\"debug\":\"Already recording, ignoring command\"}");
+        }
+      }
+#endif
+#endif
+      
+      // Legacy single character commands (now require newline)
+      if (cmdBuffer == "S") {
+        gRecordingActive = true;
+        signalRecordingStart();
+      } else if (cmdBuffer == "E") {
+        gRecordingActive = false;
+        signalRecordingStop();
+      }
+      
+      cmdBuffer = "";
+    } else {
+      cmdBuffer += c;
     }
   }
 }
@@ -100,67 +124,62 @@ void setup() {
   digitalWrite(PIN_LED, LOW);
   digitalWrite(PIN_BUZZER, LOW);
 
-  // Sentence button (with internal pullup)
-  pinMode(PIN_SENTENCE_BUTTON, INPUT_PULLUP);
-
-  if (!predictor.begin()) {
-    Serial.println("MPU6050 init FAILED");
-  } else {
-    Serial.println("EchoSignRealtime started.");
+  Serial.println("EchoSignRealtime started.");
+  Serial.print("SENTENCE_MODE_AVAILABLE=");
+  Serial.println(SENTENCE_MODE_AVAILABLE);
+  Serial.print("PREDICTION_MODE=");
+  Serial.println(PREDICTION_MODE);
+  Serial.print("RUN_MODE=");
+  Serial.println(RUN_MODE);
+  
 #if RUN_MODE == 0
-    Serial.println("Mode: DATA COLLECTION");
+  Serial.println("Mode: DATA COLLECTION");
 #else
-    Serial.println("Mode: REAL-TIME PREDICTION");
+  Serial.println("Mode: REAL-TIME PREDICTION");
   #if PREDICTION_MODE == 0
-    Serial.println("Prediction: GESTURE MODE");
+  Serial.println("Prediction: GESTURE MODE");
   #elif PREDICTION_MODE == 1
     #if SENTENCE_MODE_AVAILABLE
-      Serial.println("Prediction: SENTENCE MODE");
+  Serial.println("Prediction: SENTENCE MODE");
     #else
-      Serial.println("ERROR: Sentence mode requested but model files missing!");
-      Serial.println("Run: python tools/train_sentence_knn.py");
+  Serial.println("ERROR: Sentence mode requested but model files missing!");
+  Serial.println("Run: python tools/train_sentence_knn.py");
     #endif
   #elif PREDICTION_MODE == 2
     #if SENTENCE_MODE_AVAILABLE
-      Serial.println("Prediction: AUTO MODE (gesture + sentence button)");
+  Serial.println("Prediction: AUTO MODE (gesture + web command)");
     #else
-      Serial.println("Prediction: GESTURE MODE (sentence model not available)");
+  Serial.println("Prediction: GESTURE MODE (sentence model not available)");
     #endif
   #endif
 #endif
+  
+  // FORCE LINKER TO KEEP SENTENCE MODEL DATA
+  volatile const float* force_link_data = SENTENCE_TRAINING_DATA;
+  volatile const uint8_t* force_link_labels = SENTENCE_TRAINING_LABELS;
+  Serial.printf("Sentence model: %d samples at 0x%p\n", SENTENCE_KNN_N_SAMPLES, force_link_data);
+  
+  if (!predictor.begin()) {
+    Serial.println("WARNING: MPU6050 init FAILED - sensor readings unavailable");
+  } else {
+    Serial.println("MPU6050 initialized successfully");
     // Power-on beep
     beep(60, 1, 0);
   }
+  
+  // Auto-start sentence mode if PREDICTION_MODE == 1
+  #if SENTENCE_MODE_AVAILABLE && PREDICTION_MODE == 1
+  sentenceModeActive = true;
+  sentencePredictor.startRecording();
+  Serial.println("{\"mode\":\"sentence\",\"auto_start\":true}");
+  #endif
 }
 
 void loop() {
   // Always process incoming serial commands
   handleSerialCommands();
 
-#if RUN_MODE == 1 && SENTENCE_MODE_AVAILABLE && (PREDICTION_MODE == 1 || PREDICTION_MODE == 2)
-  // Handle sentence button (with debouncing)
-  int buttonReading = digitalRead(PIN_SENTENCE_BUTTON);
-  
-  if (buttonReading != lastButtonState) {
-    lastDebounceTime = millis();
-  }
-  
-  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY_MS) {
-    // Button is stable
-    if (buttonReading == LOW && lastButtonState == HIGH) {
-      // Button pressed (LOW because pullup)
-      if (!sentencePredictor.recording()) {
-        // Start sentence recording
-        sentenceModeActive = true;
-        sentencePredictor.startRecording();
-        signalSentenceStart();
-        
-        Serial.println("{\"event\":\"sentence_start\"}");
-      }
-    }
-  }
-  lastButtonState = buttonReading;
-#endif
+  // Physical button support removed - use web UI command instead
 
 #if RUN_MODE == 0
   // --------- DATA COLLECTION MODE ---------
@@ -239,19 +258,57 @@ void loop() {
 
 #if SENTENCE_MODE_AVAILABLE && (PREDICTION_MODE == 1 || PREDICTION_MODE == 2)
   // Check if sentence mode is active
-  if (sentenceModeActive && sentencePredictor.recording()) {
-    // Add sample to sentence buffer
-    bool windowComplete = sentencePredictor.addSample(
-      f1, f2, f3, f4, f5, gdp, fax, fay, faz, fgxDeg, fgyDeg, fgzDeg
-    );
-    
-    // Send progress update
-    float progress = sentencePredictor.getRecordingProgress();
-    Serial.print("{\"mode\":\"sentence\",\"recording\":true,\"progress\":");
-    Serial.print(progress, 2);
-    Serial.println("}");
-    
-    if (windowComplete) {
+  if (sentenceModeActive) {
+    if (sentencePredictor.recording()) {
+      // Add sample to sentence buffer - use RAW values to match training data!
+      bool windowComplete = sentencePredictor.addSample(
+        (float)flex[0], (float)flex[1], (float)flex[2], (float)flex[3], (float)flex[4],
+        gdp, (float)ax, (float)ay, (float)az, fgx, fgy, fgz
+      );
+      
+      if (windowComplete) {
+        // Send final progress update WITH SENSOR DATA
+        Serial.print("{\"mode\":\"sentence\",\"recording\":true,\"progress\":1.0,");
+        Serial.print("\"gdp\":"); Serial.print(gdp, 1); Serial.print(",");
+        Serial.print("\"f1\":"); Serial.print(f1, 2); Serial.print(",");
+        Serial.print("\"f2\":"); Serial.print(f2, 2); Serial.print(",");
+        Serial.print("\"f3\":"); Serial.print(f3, 2); Serial.print(",");
+        Serial.print("\"f4\":"); Serial.print(f4, 2); Serial.print(",");
+        Serial.print("\"f5\":"); Serial.print(f5, 2); Serial.print(",");
+        Serial.print("\"ax\":"); Serial.print(fax, 2); Serial.print(",");
+        Serial.print("\"ay\":"); Serial.print(fay, 2); Serial.print(",");
+        Serial.print("\"az\":"); Serial.print(faz, 2); Serial.print(",");
+        Serial.print("\"gx\":"); Serial.print(fgxDeg, 1); Serial.print(",");
+        Serial.print("\"gy\":"); Serial.print(fgyDeg, 1); Serial.print(",");
+        Serial.print("\"gz\":"); Serial.print(fgzDeg, 1);
+        Serial.println("}");
+      } else {
+        // Send progress update WITH SENSOR DATA every 20%
+        float progress = sentencePredictor.getRecordingProgress();
+        static int lastProgressPercent = -1;
+        int currentPercent = (int)(progress * 100);
+        
+        if (currentPercent % 20 == 0 && currentPercent != lastProgressPercent) {
+          Serial.print("{\"mode\":\"sentence\",\"recording\":true,\"progress\":");
+          Serial.print(progress, 2); Serial.print(",");
+          Serial.print("\"gdp\":"); Serial.print(gdp, 1); Serial.print(",");
+          Serial.print("\"f1\":"); Serial.print(f1, 2); Serial.print(",");
+          Serial.print("\"f2\":"); Serial.print(f2, 2); Serial.print(",");
+          Serial.print("\"f3\":"); Serial.print(f3, 2); Serial.print(",");
+          Serial.print("\"f4\":"); Serial.print(f4, 2); Serial.print(",");
+          Serial.print("\"f5\":"); Serial.print(f5, 2); Serial.print(",");
+          Serial.print("\"ax\":"); Serial.print(fax, 2); Serial.print(",");
+          Serial.print("\"ay\":"); Serial.print(fay, 2); Serial.print(",");
+          Serial.print("\"az\":"); Serial.print(faz, 2); Serial.print(",");
+          Serial.print("\"gx\":"); Serial.print(fgxDeg, 1); Serial.print(",");
+          Serial.print("\"gy\":"); Serial.print(fgyDeg, 1); Serial.print(",");
+          Serial.print("\"gz\":"); Serial.print(fgzDeg, 1);
+          Serial.println("}");
+          lastProgressPercent = currentPercent;
+        }
+      }
+      
+      if (windowComplete) {
       // Window complete, predict sentence
       signalSentenceComplete();
       
@@ -275,8 +332,26 @@ void loop() {
       Serial.print(meanDist, 2);
       Serial.println("}");
       
-      sentenceModeActive = false;
       sentencePredictor.reset();
+      
+      #if PREDICTION_MODE == 1
+        // In pure SENTENCE MODE, automatically restart recording
+        sentencePredictor.startRecording();
+      #else
+        // In AUTO MODE, return to gesture mode after prediction
+        sentenceModeActive = false;
+      #endif
+      }
+    } else {
+      // Recording not started yet or already complete
+      Serial.println("{\"debug\":\"sentenceModeActive=true but recording=false\"}");
+      
+      #if PREDICTION_MODE == 1
+        // In pure SENTENCE MODE, restart recording if it's not active
+        sentencePredictor.startRecording();
+      #else
+        sentenceModeActive = false;
+      #endif
     }
     
     delay(10);  // Small delay for sampling rate control

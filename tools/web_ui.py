@@ -2,7 +2,7 @@ import os
 import threading
 import time
 import json
-from flask import Flask, jsonify, Response, send_from_directory
+from flask import Flask, jsonify, Response, send_from_directory, request
 from flask_cors import CORS
 import serial
 
@@ -18,6 +18,8 @@ class State:
     def __init__(self):
         self.latest_data = {}
         self.latest_pred_line = "---"
+        self.sentence_data = None  # Store sentence results separately
+        self.sentence_timestamp = 0.0  # Track when sentence was predicted (float for time.time())
         self.ser = None
         self.lock = threading.Lock()
 
@@ -73,11 +75,29 @@ def serial_reader():
                 try:
                     data = json.loads(line)
                     with STATE.lock:
-                        STATE.latest_data = data
-                        # Update legacy pred line for compatibility
-                        if "label" in data:
-                            meanD = data.get("meanD", 0)
-                            STATE.latest_pred_line = f"PRED: {data['label']} (meanD={meanD:.2f})"
+                        # Check for debug/event messages
+                        if "debug" in data:
+                            print(f"[DEBUG] {data['debug']}")
+                        if "event" in data:
+                            print(f"[EVENT] {data['event']}")
+                        
+                        # Check if this is sentence mode data
+                        if data.get("mode") == "sentence":
+                            # Store sentence data separately
+                            STATE.sentence_data = data
+                            STATE.sentence_timestamp = time.time()
+                            # Log sentence predictions
+                            if data.get("recording"):
+                                print(f"[Sentence] Recording: {data.get('progress', 0)*100:.0f}%")
+                            elif data.get("sentence"):
+                                print(f"[Sentence] Predicted: {data.get('sentence')} (confidence: {data.get('confidence', 0)*100:.0f}%)")
+                        elif data.get("mode") == "gesture":
+                            # Regular gesture data
+                            STATE.latest_data = data
+                            # Update legacy pred line for compatibility
+                            if "label" in data:
+                                meanD = data.get("meanD", 0)
+                                STATE.latest_pred_line = f"PRED: {data['label']} (meanD={meanD:.2f})"
                 except json.JSONDecodeError:
                     pass
 
@@ -120,7 +140,11 @@ def hand_model():
 def api_data():
     """REST endpoint for real-time data (fallback for WebSocket)"""
     with STATE.lock:
-        data = STATE.latest_data.copy()
+        # Check if we have recent sentence data (within 5 seconds)
+        if STATE.sentence_data and (time.time() - STATE.sentence_timestamp) < 5.0:
+            data = STATE.sentence_data.copy()
+        else:
+            data = STATE.latest_data.copy()
     
     # Ensure we have at least a label field
     if not data:
@@ -144,6 +168,27 @@ def api_pred():
             pass
     
     return jsonify(pred=line, label=gesture)
+
+@app.route("/api/sentence", methods=["POST"])
+def trigger_sentence():
+    """Trigger sentence prediction on ESP32"""
+    print("[API] Sentence prediction triggered from web UI")
+    try:
+        if STATE.ser and STATE.ser.is_open:
+            print("[API] Sending START_SENTENCE command to ESP32")
+            # Send command with explicit encoding
+            cmd = b"START_SENTENCE\n"
+            bytes_written = STATE.ser.write(cmd)
+            STATE.ser.flush()
+            print(f"[API] Wrote {bytes_written} bytes, command sent successfully")
+            print(f"[API] Command bytes: {cmd}")
+            return jsonify({"status": "ok", "message": "Sentence prediction started"})
+        else:
+            print("[API] ERROR: Serial not connected")
+            return jsonify({"status": "error", "message": "Serial not connected"}), 503
+    except Exception as e:
+        print(f"[API] ERROR: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 def main():

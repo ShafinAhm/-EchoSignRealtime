@@ -29,7 +29,7 @@ import serial
 BANNER = """
 ╔═══════════════════════════════════════════════════════════╗
 ║     EchoSign – Sentence/Phrase Data Collector            ║
-║     Collects 4-second windows for complete sentences     ║
+║     Collects 3-second windows for complete sentences     ║
 ╚═══════════════════════════════════════════════════════════╝
 
 Expected ESP32 output format:
@@ -38,18 +38,18 @@ Expected ESP32 output format:
 WORKFLOW:
   1. Enter sentence name (e.g., "how_are_you", "i_eat_rice")
   2. Preview sensor data (3 sec) - get ready
-  3. Press ENTER to start 4-second recording
+  3. Press ENTER to start 3-second recording
   4. Perform the complete sentence gesture sequence
-  5. Recording automatically stops after 4 seconds
+  5. Recording automatically stops after 3 seconds
   6. File saved to: data/sentence_raw_<label>_<id>.txt
 
 Repeat 5-10 times per sentence for best model accuracy!
 """
 
 # Recording parameters
-RECORD_DURATION_SEC = 4.0
+RECORD_DURATION_SEC = 3.0
 SAMPLE_RATE_HZ = 20  # 20 Hz = 50ms between samples
-EXPECTED_SAMPLES = int(RECORD_DURATION_SEC * SAMPLE_RATE_HZ)  # ~80 samples
+EXPECTED_SAMPLES = int(RECORD_DURATION_SEC * SAMPLE_RATE_HZ)  # ~60 samples
 
 
 def make_slug(label: str) -> str:

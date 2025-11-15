@@ -476,6 +476,7 @@ const elements = {
     statusText: document.getElementById('statusText'),
     gestureName: document.getElementById('gestureName'),
     confidenceFill: document.getElementById('confidenceFill'),
+    confidenceBar: null, // Will be set after DOM loads
     confidenceValue: document.getElementById('confidenceValue'),
     gdpValue: document.getElementById('gdpValue'),
     gdpBar: document.getElementById('gdpBar'),
@@ -497,8 +498,31 @@ const elements = {
     gyroX: document.getElementById('gyroX'),
     gyroY: document.getElementById('gyroY'),
     gyroZ: document.getElementById('gyroZ'),
-    historyList: document.getElementById('historyList')
+    historyList: document.getElementById('historyList'),
+    debugLog: document.getElementById('debugLog')
 };
+
+// Log management
+let logCounter = 0;
+const MAX_LOG_ENTRIES = 50;
+
+function addLog(message, type = 'gesture') {
+    if (!elements.debugLog) return;
+    
+    logCounter++;
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    elements.debugLog.appendChild(entry);
+    
+    // Keep only last MAX_LOG_ENTRIES
+    while (elements.debugLog.children.length > MAX_LOG_ENTRIES) {
+        elements.debugLog.removeChild(elements.debugLog.firstChild);
+    }
+    
+    // Auto-scroll to bottom
+    elements.debugLog.scrollTop = elements.debugLog.scrollHeight;
+}
 
 // Initialize WebSocket connection
 function connectWebSocket() {
@@ -559,18 +583,58 @@ function handleData(data) {
     // Update 3D hand model with real-time sensor data
     update3DHandPose(data);
     
-    // Update gesture display
-    if (data.label && data.label !== 'unknown') {
-        elements.gestureName.textContent = data.label;
-        predCount++;
-        addToHistory(data.label);
-        
-        // Calculate confidence (inverse of meanD, normalized)
-        const confidence = data.meanD ? Math.max(0, Math.min(100, 100 - data.meanD * 10)) : 0;
-        updateConfidence(confidence);
+    // Check if we're in sentence mode (UI state takes priority)
+    if (currentMode === 'sentence') {
+        // In sentence mode, only show sentence predictions and progress
+        if (data.mode === 'sentence') {
+            if (data.recording === true) {
+                // Show prediction progress
+                elements.gestureName.textContent = '⏳ Analyzing...';
+                const progress = (data.progress || 0) * 100;
+                updateConfidence(progress);
+                
+                // Update progress bar style for sentence mode
+                elements.confidenceBar.style.background = 'linear-gradient(to right, #10b981, #34d399)';
+            } else if (data.sentence) {
+                // Show sentence prediction
+                elements.gestureName.textContent = data.sentence;
+                predCount++;
+                addToHistory(data.sentence);
+                
+                const confidence = data.confidence ? data.confidence * 100 : 0;
+                updateConfidence(confidence);
+                
+                // Reset progress bar style
+                elements.confidenceBar.style.background = '';
+                
+                console.log(`Predicted: "${data.sentence}" (conf: ${confidence.toFixed(0)}%, meanD: ${data.meanD?.toFixed(1)})`);
+            }
+        } else {
+            // ESP32 is sending gesture data but we're in sentence mode
+            // Show waiting message until next sentence prediction triggers
+            if (!elements.gestureName.textContent.includes('...')) {
+                elements.gestureName.textContent = '⏳ Waiting...';
+                updateConfidence(0);
+            }
+        }
+        // Don't return - continue to update sensor data below
     }
     
-    // Update GDP (motion metric)
+    // Gesture mode - update gesture display
+    if (currentMode === 'gesture') {
+        // Update gesture display
+        if (data.label && data.label !== 'unknown') {
+            elements.gestureName.textContent = data.label;
+            predCount++;
+            addToHistory(data.label);
+            
+            // Calculate confidence (inverse of meanD, normalized)
+            const confidence = data.meanD ? Math.max(0, Math.min(100, 100 - data.meanD * 10)) : 0;
+            updateConfidence(confidence);
+        }
+    }
+    
+    // Update sensor data (GDP, flex, IMU) - for both modes
     if (data.gdp !== undefined) {
         const gdp = parseFloat(data.gdp);
         elements.gdpValue.textContent = gdp.toFixed(1);
@@ -679,12 +743,84 @@ function stopPolling() {
     }
 }
 
+// Mode management
+let currentMode = 'gesture'; // 'gesture' or 'sentence'
+let sentencePollInterval = null;
+
+// Switch to gesture mode
+function switchToGestureMode() {
+    if (currentMode === 'gesture') return;
+    
+    currentMode = 'gesture';
+    console.log('Switched to gesture mode');
+    
+    // Stop sentence polling if active
+    if (sentencePollInterval) {
+        clearInterval(sentencePollInterval);
+        sentencePollInterval = null;
+    }
+    
+    // Update button states
+    document.getElementById('gestureBtn').classList.add('active');
+    document.getElementById('sentenceBtn').classList.remove('active');
+}
+
+// Switch to sentence mode
+async function switchToSentenceMode() {
+    if (currentMode === 'sentence') return;
+    
+    currentMode = 'sentence';
+    console.log('Switched to sentence mode');
+    
+    // Update button states
+    document.getElementById('gestureBtn').classList.remove('active');
+    document.getElementById('sentenceBtn').classList.add('active');
+    
+    // Start continuous sentence predictions (trigger every 4.5 seconds)
+    triggerSentencePrediction(); // Immediate first trigger
+    sentencePollInterval = setInterval(triggerSentencePrediction, 4500);
+}
+
+// Trigger a single sentence prediction
+async function triggerSentencePrediction() {
+    try {
+        const response = await fetch('/api/sentence', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+            console.error(`HTTP ${response.status}: Failed to trigger sentence prediction`);
+        }
+    } catch (e) {
+        console.error('Error triggering sentence:', e);
+    }
+}
+
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', () => {
     console.log('EchoSign Web UI initialized');
     
+    // Get confidence bar element (parent of confidenceFill)
+    elements.confidenceBar = elements.confidenceFill ? elements.confidenceFill.parentElement : null;
+    
     // Initialize 3D hand model
     init3DHandModel();
+    
+    // Add mode button handlers
+    const gestureBtn = document.getElementById('gestureBtn');
+    const sentenceBtn = document.getElementById('sentenceBtn');
+    
+    if (gestureBtn) {
+        gestureBtn.addEventListener('click', switchToGestureMode);
+    }
+    
+    if (sentenceBtn) {
+        sentenceBtn.addEventListener('click', switchToSentenceMode);
+    }
+    
+    // Start in gesture mode (default)
+    currentMode = 'gesture';
     
     // Try WebSocket first
     connectWebSocket();
