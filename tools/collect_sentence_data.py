@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 EchoSign – Sentence Data Collector
 -----------------------------------
