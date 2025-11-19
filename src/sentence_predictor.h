@@ -19,9 +19,10 @@ extern const uint8_t SENTENCE_TRAINING_LABELS[];
  */
 
 // Configuration
-#define SENTENCE_WINDOW_DURATION_MS 4000  // 4 seconds
+#define SENTENCE_WINDOW_DURATION_MS 4000  // 4 seconds recording window
 #define SENTENCE_SAMPLE_RATE_HZ 20        // 20 Hz
-#define SENTENCE_SAMPLES_PER_WINDOW 80    // 4 sec * 20 Hz
+#define SENTENCE_SAMPLES_PER_WINDOW 80    // 4 sec * 20 Hz = 80 samples
+#define SENTENCE_SAMPLES_FOR_PREDICTION 80 // Use all 80 samples (4 sec) - matches training data!
 #define SENTENCE_SAMPLE_INTERVAL_MS (1000 / SENTENCE_SAMPLE_RATE_HZ)  // 50ms
 
 // Circular buffer for sensor samples
@@ -137,7 +138,7 @@ public:
     float features[SENTENCE_NUM_FEATURES];
     int idx = 0;
     
-    for (int t = 0; t < SENTENCE_SAMPLES_PER_WINDOW; t++) {
+    for (int t = 0; t < SENTENCE_SAMPLES_FOR_PREDICTION; t++) {
       features[idx++] = buffer[t].f1;
       features[idx++] = buffer[t].f2;
       features[idx++] = buffer[t].f3;

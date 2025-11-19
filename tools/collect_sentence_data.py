@@ -46,7 +46,7 @@ Repeat 5-10 times per sentence for best model accuracy!
 """
 
 # Recording parameters
-RECORD_DURATION_SEC = 3.0
+RECORD_DURATION_SEC = 4.0
 SAMPLE_RATE_HZ = 20  # 20 Hz = 50ms between samples
 EXPECTED_SAMPLES = int(RECORD_DURATION_SEC * SAMPLE_RATE_HZ)  # ~60 samples
 
@@ -203,64 +203,72 @@ def main():
         
         slug = make_slug(label)
         
-        # Find next available session ID
-        session_id = 1
+        # Inner loop for recording same sentence multiple times
         while True:
-            filename = f"sentence_raw_{slug}_{session_id:02d}.txt"
-            file_path = os.path.join(data_dir, filename)
-            if not os.path.exists(file_path):
+            # Find next available session ID
+            session_id = 1
+            while True:
+                filename = f"sentence_raw_{slug}_{session_id:02d}.txt"
+                file_path = os.path.join(data_dir, filename)
+                if not os.path.exists(file_path):
+                    break
+                session_id += 1
+            
+            print(f"\nSentence: '{label}'")
+            print(f"Will save to: {filename}")
+            print(f"Recording duration: {RECORD_DURATION_SEC} seconds")
+            print(f"Target samples: ~{EXPECTED_SAMPLES} samples @ {SAMPLE_RATE_HZ} Hz")
+            
+            # Show preview
+            preview_data(ser, duration=3.0)
+            
+            # Wait for user ready
+            input("Press ENTER when ready to START 3-second recording...")
+            
+            # Countdown
+            print("\nStarting in...")
+            for i in range(3, 0, -1):
+                print(f"  {i}...")
+                time.sleep(1)
+            print("  GO!\n")
+            
+            # Record
+            samples = record_sentence(ser, duration=RECORD_DURATION_SEC)
+            
+            # Check sample count
+            if len(samples) < EXPECTED_SAMPLES * 0.5:  # Less than 50% of expected
+                print(f"\n⚠ WARNING: Only got {len(samples)} samples (expected ~{EXPECTED_SAMPLES})")
+                print("  This might indicate:")
+                print("  - ESP32 not sending data fast enough")
+                print("  - Serial connection issues")
+                retry = input("  Save anyway? (y/n): ").strip().lower()
+                if retry != 'y':
+                    print("  Discarding this recording.\n")
+                    continue
+            
+            # Save
+            save_sentence_data(samples, label, file_path)
+            session_count += 1
+            
+            print(f"\n{'='*60}")
+            print(f"Session {session_count} complete!")
+            print(f"{'='*60}")
+            
+            # Ask to continue
+            print(f"\nRecommendation: Record 5-10 sessions per sentence for best accuracy")
+            again = input("Record another session? (y=yes, n=quit, ENTER=same sentence again): ").strip().lower()
+            
+            if again == 'n':
+                # Exit both loops
                 break
-            session_id += 1
+            elif again == 'y':
+                # Break inner loop to ask for new sentence
+                break
+            # else: any other key continues inner loop (same sentence)
         
-        print(f"\nSentence: '{label}'")
-        print(f"Will save to: {filename}")
-        print(f"Recording duration: {RECORD_DURATION_SEC} seconds")
-        print(f"Target samples: ~{EXPECTED_SAMPLES} samples @ {SAMPLE_RATE_HZ} Hz")
-        
-        # Show preview
-        preview_data(ser, duration=3.0)
-        
-        # Wait for user ready
-        input("Press ENTER when ready to START 3-second recording...")
-        
-        # Countdown
-        print("\nStarting in...")
-        for i in range(3, 0, -1):
-            print(f"  {i}...")
-            time.sleep(1)
-        print("  GO!\n")
-        
-        # Record
-        samples = record_sentence(ser, duration=RECORD_DURATION_SEC)
-        
-        # Check sample count
-        if len(samples) < EXPECTED_SAMPLES * 0.5:  # Less than 50% of expected
-            print(f"\n⚠ WARNING: Only got {len(samples)} samples (expected ~{EXPECTED_SAMPLES})")
-            print("  This might indicate:")
-            print("  - ESP32 not sending data fast enough")
-            print("  - Serial connection issues")
-            retry = input("  Save anyway? (y/n): ").strip().lower()
-            if retry != 'y':
-                print("  Discarding this recording.\n")
-                continue
-        
-        # Save
-        save_sentence_data(samples, label, file_path)
-        session_count += 1
-        
-        print(f"\n{'='*60}")
-        print(f"Session {session_count} complete!")
-        print(f"{'='*60}")
-        
-        # Ask to continue
-        print(f"\nRecommendation: Record 5-10 sessions per sentence for best accuracy")
-        again = input("Record another session? (y=yes, n=quit, any other key=same sentence again): ").strip().lower()
-        
+        # Check if user wants to quit completely
         if again == 'n':
             break
-        elif again != 'y':
-            # Same sentence, decrement to reuse this session
-            continue
 
     # Cleanup
     ser.close()

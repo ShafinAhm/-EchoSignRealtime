@@ -777,6 +777,7 @@ async function switchToSentenceMode() {
     document.getElementById('sentenceBtn').classList.add('active');
     
     // Start continuous sentence predictions (trigger every 4.5 seconds)
+    // Recording takes 4 seconds + 0.5 second gap = 4.5 seconds total
     triggerSentencePrediction(); // Immediate first trigger
     sentencePollInterval = setInterval(triggerSentencePrediction, 4500);
 }
