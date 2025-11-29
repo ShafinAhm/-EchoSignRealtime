@@ -627,7 +627,13 @@ function handleData(data) {
                 elements.gestureName.textContent = data.sentence;
                 predCount++;
                 addToHistory(data.sentence);
-                speakText(data.sentence);
+                if (typeof window.__lastSentenceSpoken === 'undefined') {
+                    window.__lastSentenceSpoken = null;
+                }
+                if (data.sentence !== window.__lastSentenceSpoken) {
+                    speakText(data.sentence);
+                    window.__lastSentenceSpoken = data.sentence;
+                }
                 
                 const confidence = data.confidence ? data.confidence * 100 : 0;
                 updateConfidence(confidence);
@@ -655,7 +661,13 @@ function handleData(data) {
             elements.gestureName.textContent = data.label;
             predCount++;
             addToHistory(data.label);
-            speakText(data.label);
+            if (typeof window.__lastGestureSpoken === 'undefined') {
+                window.__lastGestureSpoken = null;
+            }
+            if (data.label !== window.__lastGestureSpoken) {
+                speakText(data.label);
+                window.__lastGestureSpoken = data.label;
+            }
             
             // Calculate confidence (inverse of meanD, normalized)
             const confidence = data.meanD ? Math.max(0, Math.min(100, 100 - data.meanD * 10)) : 0;
