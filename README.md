@@ -159,8 +159,8 @@ See `platformio.ini` for board, framework, and serial settings.
 
 ## License
 
-[Add license information here]
+MIT License. See `LICENSE` for full text.
 
 ## Author
 
-[Add author information here]
+Tasir Mahtab Haque
