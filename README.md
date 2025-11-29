@@ -1,6 +1,6 @@
 # EchoSignRealtime
 
-![EchoSign Glove Front](data/WhatsApp%20Image%202025-11-29%20at%203.47.41%20PM.jpeg)
+<img src="data/WhatsApp%20Image%202025-11-29%20at%203.47.41%20PM.jpeg" alt="EchoSign Glove Front" width="600" />
 
 Real-time gesture and sentence recognition for a wearable sign glove. Firmware runs a lightweight KNN model (float and quantized int8) and streams predictions to a Web UI with optional text-to-speech.
 
@@ -98,9 +98,9 @@ Start the web interface:
 
 Photos of the current glove build (flex sensors + ESP32):
 
-![EchoSign Glove Front](data/WhatsApp%20Image%202025-11-29%20at%203.47.41%20PM.jpeg)
+<img src="data/WhatsApp%20Image%202025-11-29%20at%203.47.41%20PM.jpeg" alt="EchoSign Glove Front" width="600" />
 
-![EchoSign Glove + UI](data/WhatsApp%20Image%202025-11-29%20at%203.47.42%20PM.jpeg)
+<img src="data/WhatsApp%20Image%202025-11-29%20at%203.47.42%20PM.jpeg" alt="EchoSign Glove + UI" width="600" />
 ```powershell
 python tools/web_ui.py
 ```
