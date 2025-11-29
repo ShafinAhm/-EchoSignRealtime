@@ -1,8 +1,8 @@
 """
 EchoSign – Sentence Data Collector
 -----------------------------------
-Collects 3-second windows of continuous sensor data for complete sentences/phrases.
-Each 3-second window represents ONE complete sentence (e.g., "how are you").
+Collects 4-second windows of continuous sensor data for complete sentences/phrases.
+Each 4-second window represents ONE complete sentence (e.g., "how are you").
 
 Usage:
   python collect_sentence_data.py --port COM15
@@ -10,13 +10,12 @@ Usage:
 The tool will:
   1. Prompt for sentence name
   2. Show live preview of sensor data
-  3. Wait for button press to START 3-second recording
-  4. Automatically stop after 3 seconds
+    3. Wait and START a 4-second recording window
+    4. Automatically stop after 4 seconds
   5. Save to: data/sentence_raw_<label>_<id>.txt
 
 Requirements:
-  - ESP32 must be in DATA COLLECTION mode (RUN_MODE = 0)
-  - Button connected to trigger recording
+    - ESP32 must be in DATA COLLECTION mode (RUN_MODE = 0)
 """
 
 import argparse
@@ -28,7 +27,7 @@ import serial
 BANNER = """
 ╔═══════════════════════════════════════════════════════════╗
 ║     EchoSign – Sentence/Phrase Data Collector            ║
-║     Collects 3-second windows for complete sentences     ║
+║     Collects 4-second windows for complete sentences     ║
 ╚═══════════════════════════════════════════════════════════╝
 
 Expected ESP32 output format:
@@ -36,19 +35,19 @@ Expected ESP32 output format:
 
 WORKFLOW:
   1. Enter sentence name (e.g., "how_are_you", "i_eat_rice")
-  2. Preview sensor data (3 sec) - get ready
-  3. Press ENTER to start 3-second recording
+    2. Preview sensor data (3 sec) - get ready
+    3. Press ENTER to start 4-second recording
   4. Perform the complete sentence gesture sequence
-  5. Recording automatically stops after 3 seconds
+    5. Recording automatically stops after 4 seconds
   6. File saved to: data/sentence_raw_<label>_<id>.txt
 
 Repeat 5-10 times per sentence for best model accuracy!
 """
 
-# Recording parameters
+# Recording parameters (must match trainer/inference: 4s @ 20 Hz → 80 samples)
 RECORD_DURATION_SEC = 4.0
 SAMPLE_RATE_HZ = 20  # 20 Hz = 50ms between samples
-EXPECTED_SAMPLES = int(RECORD_DURATION_SEC * SAMPLE_RATE_HZ)  # ~60 samples
+EXPECTED_SAMPLES = int(RECORD_DURATION_SEC * SAMPLE_RATE_HZ)  # ~80 samples
 
 
 def make_slug(label: str) -> str:
@@ -89,9 +88,9 @@ def record_sentence(ser: serial.Serial, duration: float = RECORD_DURATION_SEC) -
     print(f"  Duration: {duration:.1f} seconds")
     print(f"{'*'*60}\n")
     
-    # Send START command to ESP32
+    # Send START command to ESP32 (legacy single-char requires newline)
     try:
-        ser.write(b"S")
+        ser.write(b"S\n")
     except Exception as e:
         print(f"Warning: Could not send START command: {e}")
     
@@ -121,9 +120,9 @@ def record_sentence(ser: serial.Serial, duration: float = RECORD_DURATION_SEC) -
         
         samples.append(line)
     
-    # Send STOP command to ESP32
+    # Send STOP command to ESP32 (legacy single-char requires newline)
     try:
-        ser.write(b"E")
+        ser.write(b"E\n")
     except Exception as e:
         print(f"\nWarning: Could not send STOP command: {e}")
     
@@ -223,7 +222,7 @@ def main():
             preview_data(ser, duration=3.0)
             
             # Wait for user ready
-            input("Press ENTER when ready to START 3-second recording...")
+            input("Press ENTER when ready to START 4-second recording...")
             
             # Countdown
             print("\nStarting in...")

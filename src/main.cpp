@@ -7,7 +7,6 @@
 #include "sentence_predictor.h"
 #include "sentence_label_names.h"
 
-// -------------------- CONFIG --------------------
 
 // 0 = DATA COLLECTION (raw log for Python tools)
 // 1 = REAL-TIME PREDICTION (uses KNN model)
@@ -321,8 +320,11 @@ void loop() {
         sentenceName = sentence_label_names[labelIdx];
       }
       
-      // Calculate confidence (inverse of distance)
+      // Calculate confidence (inverse of distance) and damp if Rest
       float confidence = 1.0f / (1.0f + meanDist);
+      if (strcmp(sentenceName, "Rest") == 0) {
+        confidence *= 0.2f;  // present Rest as low confidence to UI
+      }
       
       // Output sentence prediction
       Serial.print("{\"mode\":\"sentence\",\"recording\":false,\"sentence\":\"");

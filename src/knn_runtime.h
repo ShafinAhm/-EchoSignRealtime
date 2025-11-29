@@ -5,21 +5,32 @@
 
 // Compute distance between two feature vectors (size NUM_FEATURES)
 inline float knn_distance(const float* a, const float* b) {
-  float d = 0.0f;
   if (KNN_METRIC == 0) {
     // Euclidean (squared L2)
+    float d = 0.0f;
     for (int i = 0; i < NUM_FEATURES; ++i) {
       float diff = a[i] - b[i];
       d += diff * diff;
     }
-  } else {
+    return d;
+  } else if (KNN_METRIC == 1) {
     // Manhattan (L1)
+    float d = 0.0f;
     for (int i = 0; i < NUM_FEATURES; ++i) {
       float diff = a[i] - b[i];
       d += (diff >= 0 ? diff : -diff);
     }
+    return d;
+  } else {
+    // Chebyshev (L-infinity)
+    float dmax = 0.0f;
+    for (int i = 0; i < NUM_FEATURES; ++i) {
+      float diff = a[i] - b[i];
+      float adiff = (diff >= 0 ? diff : -diff);
+      if (adiff > dmax) dmax = adiff;
+    }
+    return dmax;
   }
-  return d;
 }
 
 // KNN classification.

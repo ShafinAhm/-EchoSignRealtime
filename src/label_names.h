@@ -1,6 +1,6 @@
 #pragma once
 
-#define NUM_CLASSES 13
+#define NUM_CLASSES 26
 
 static const char* const label_names[NUM_CLASSES] = {
   "A",
@@ -12,8 +12,21 @@ static const char* const label_names[NUM_CLASSES] = {
   "G",
   "H",
   "I",
+  "J",
   "K",
   "L",
   "M",
-  "Rest"
+  "N",
+  "O",
+  "P",
+  "Q",
+  "R",
+  "Rest",
+  "S",
+  "T",
+  "U",
+  "V",
+  "W",
+  "X",
+  "Y"
 };

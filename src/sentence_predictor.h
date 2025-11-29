@@ -7,14 +7,14 @@
 extern const float SENTENCE_TRAINING_DATA[];
 extern const uint8_t SENTENCE_TRAINING_LABELS[];
 
-#define SENTENCE_KNN_N_NEIGHBORS 3
+#define SENTENCE_KNN_N_NEIGHBORS 5
 #define SENTENCE_KNN_N_SAMPLES 39
 #define SENTENCE_KNN_N_FEATURES 960
 
 /**
  * Sentence Predictor
  * 
- * Collects 3-second windows of sensor data and predicts complete sentences.
+ * Collects 4-second windows of sensor data and predicts complete sentences.
  * Uses a circular buffer to continuously store recent sensor readings.
  */
 
@@ -27,7 +27,7 @@ extern const uint8_t SENTENCE_TRAINING_LABELS[];
 
 // Circular buffer for sensor samples
 struct SensorSample {
-  float f1, f2, f3, f4, f5;  // Flex sensors (normalized 0-1)
+  float f1, f2, f3, f4, f5;  // Flex sensors (RAW values, match training logs)
   float gdp;                  // Gyro magnitude
   float ax, ay, az;           // Accelerometer (g)
   float gx, gy, gz;           // Gyroscope (deg/s)
@@ -41,6 +41,7 @@ private:
   bool bufferFilled;
   bool isRecording;
   uint32_t recordingStartTime;
+  int restLabelIndex = -1;  // resolved lazily from label names
 
 public:
   SentencePredictor() 
@@ -48,7 +49,7 @@ public:
       isRecording(false), recordingStartTime(0) 
   {}
 
-  // Start recording a 3-second window
+  // Start recording a 4-second window
   void startRecording() {
     isRecording = true;
     recordingStartTime = millis();
@@ -138,26 +139,77 @@ public:
     float features[SENTENCE_NUM_FEATURES];
     int idx = 0;
     
-    for (int t = 0; t < SENTENCE_SAMPLES_FOR_PREDICTION; t++) {
-      features[idx++] = buffer[t].f1;
-      features[idx++] = buffer[t].f2;
-      features[idx++] = buffer[t].f3;
-      features[idx++] = buffer[t].f4;
-      features[idx++] = buffer[t].f5;
-      features[idx++] = buffer[t].gdp;
-      features[idx++] = buffer[t].ax;
-      features[idx++] = buffer[t].ay;
-      features[idx++] = buffer[t].az;
-      features[idx++] = buffer[t].gx;
-      features[idx++] = buffer[t].gy;
-      features[idx++] = buffer[t].gz;
+    // If we collected fewer than target samples (due to timing), resample to 80 via linear interpolation
+    int collected = min((int)SENTENCE_SAMPLES_PER_WINDOW, (int)bufferIndex);
+    if (collected < (int)SENTENCE_SAMPLES_FOR_PREDICTION) {
+      // Precompute mapping from target index to source fractional index
+      for (int t = 0; t < SENTENCE_SAMPLES_FOR_PREDICTION; t++) {
+        float srcPos = (collected > 1)
+          ? (float)t * (float)(collected - 1) / (float)(SENTENCE_SAMPLES_FOR_PREDICTION - 1)
+          : 0.0f;
+        int i0 = (int)floorf(srcPos);
+        int i1 = (int)ceilf(srcPos);
+        float w = srcPos - (float)i0;
+
+        const SensorSample& s0 = buffer[i0];
+        const SensorSample& s1 = buffer[i1];
+
+        auto lerp = [w](float a, float b) { return a + w * (b - a); };
+
+        features[idx++] = lerp(s0.f1, s1.f1);
+        features[idx++] = lerp(s0.f2, s1.f2);
+        features[idx++] = lerp(s0.f3, s1.f3);
+        features[idx++] = lerp(s0.f4, s1.f4);
+        features[idx++] = lerp(s0.f5, s1.f5);
+        features[idx++] = lerp(s0.gdp, s1.gdp);
+        features[idx++] = lerp(s0.ax, s1.ax);
+        features[idx++] = lerp(s0.ay, s1.ay);
+        features[idx++] = lerp(s0.az, s1.az);
+        features[idx++] = lerp(s0.gx, s1.gx);
+        features[idx++] = lerp(s0.gy, s1.gy);
+        features[idx++] = lerp(s0.gz, s1.gz);
+      }
+    } else {
+      // Exact 80 samples collected; copy directly
+      for (int t = 0; t < SENTENCE_SAMPLES_FOR_PREDICTION; t++) {
+        features[idx++] = buffer[t].f1;
+        features[idx++] = buffer[t].f2;
+        features[idx++] = buffer[t].f3;
+        features[idx++] = buffer[t].f4;
+        features[idx++] = buffer[t].f5;
+        features[idx++] = buffer[t].gdp;
+        features[idx++] = buffer[t].ax;
+        features[idx++] = buffer[t].ay;
+        features[idx++] = buffer[t].az;
+        features[idx++] = buffer[t].gx;
+        features[idx++] = buffer[t].gy;
+        features[idx++] = buffer[t].gz;
+      }
     }
 
     // Standardize features
     standardizeSentenceFeatures(features);
 
-    // KNN prediction (Euclidean distance)
-    return predictSentenceKNN(features, meanDistance);
+    // KNN prediction (Manhattan distance with distance-weighted voting)
+    uint8_t pred = predictSentenceKNN(features, meanDistance);
+
+    // Resolve 'Rest' index lazily
+    if (restLabelIndex < 0) {
+      for (int i = 0; i < SENTENCE_NUM_CLASSES; ++i) {
+        if (strcmp(sentence_label_names[i], "Rest") == 0) {
+          restLabelIndex = i;
+          break;
+        }
+      }
+    }
+
+    // If mean distance is extremely high, treat as Rest/unknown
+    const float REJECTION_MEAN_DISTANCE = 20000.0f; // tuned down from 50000
+    if (*meanDistance > REJECTION_MEAN_DISTANCE && restLabelIndex >= 0) {
+      return (uint8_t)restLabelIndex;
+    }
+
+    return pred;
   }
 
   // Reset buffer
@@ -168,7 +220,7 @@ public:
   }
 
 private:
-  // KNN prediction using Euclidean distance
+  // KNN prediction using Manhattan distance (L1) with distance-weighted voting
   uint8_t predictSentenceKNN(const float* query, float* outMeanDist) {
     const int K = SENTENCE_KNN_N_NEIGHBORS;
     const int N = SENTENCE_KNN_N_SAMPLES;
@@ -215,19 +267,21 @@ private:
       }
     }
 
-    // Vote among K nearest neighbors
+    // Distance-weighted voting (matches training weights='distance')
     const int numClasses = SENTENCE_NUM_CLASSES;
-    uint8_t votes[numClasses] = {0};
+    float weightSums[numClasses];
+    for (int i = 0; i < numClasses; i++) weightSums[i] = 0.0f;
     for (int i = 0; i < K; i++) {
-      votes[nearestLabels[i]]++;
+      float w = 1.0f / (nearestDist[i] + 1e-6f); // avoid div by zero
+      weightSums[nearestLabels[i]] += w;
     }
 
-    // Find label with most votes
+    // Pick label with largest accumulated weight
     uint8_t bestLabel = 0;
-    uint8_t maxVotes = 0;
+    float bestWeight = -1.0f;
     for (int i = 0; i < numClasses; i++) {
-      if (votes[i] > maxVotes) {
-        maxVotes = votes[i];
+      if (weightSums[i] > bestWeight) {
+        bestWeight = weightSums[i];
         bestLabel = i;
       }
     }
@@ -238,7 +292,6 @@ private:
       sumDist += nearestDist[i];
     }
     *outMeanDist = sumDist / K;
-
     return bestLabel;
   }
 };

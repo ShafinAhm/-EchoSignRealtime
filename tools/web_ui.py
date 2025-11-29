@@ -2,7 +2,7 @@ import os
 import threading
 import time
 import json
-from flask import Flask, jsonify, Response, send_from_directory, request
+from flask import Flask as FlaskApp, jsonify, Response, send_from_directory, request
 from flask_cors import CORS
 import serial
 
@@ -113,7 +113,7 @@ def serial_reader():
 
 
 # -------- FLASK WEB SERVER --------
-app = Flask(__name__)
+app = FlaskApp(__name__)
 CORS(app)
 
 @app.route("/")

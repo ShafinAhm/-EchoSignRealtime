@@ -393,10 +393,11 @@ def main() -> None:
     
     # Train KNN with grid search
     print("\nTraining KNN model (this may take a minute)...")
+    # Ensure training metric matches firmware (Manhattan/L1) and use distance weights
     param_grid = {
-        'n_neighbors': [3],  # Force K=3 for better generalization
-        'weights': ['uniform', 'distance'],
-        'metric': ['euclidean', 'manhattan']
+        'n_neighbors': [3, 5],  # Try K=3 and K=5
+        'weights': ['distance'],
+        'metric': ['manhattan']
     }
     
     knn: KNeighborsClassifier = KNeighborsClassifier()

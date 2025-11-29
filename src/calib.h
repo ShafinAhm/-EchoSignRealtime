@@ -36,8 +36,10 @@ static const int PIN_SENTENCE_BUTTON = 5;
 
 // --------- Flex calibration (raw ADC min / max) ---------
 // Replace these with the values printed by extract_calib_from_dump.py
-static const int FLEX_MIN[5] = {2000, 2000, 2000, 2000, 2000};
-static const int FLEX_MAX[5] = {3500, 3500, 3500, 3500, 3500};
+// Interim calibration (straight baselines -> fist baselines)
+static const int FLEX_MIN[5] = {2400, 2550, 2300, 2550, 2400};
+// Widen MAX to reduce early bend sensitivity
+static const int FLEX_MAX[5] = {3200, 3150, 3000, 3000, 3250};
 
 // Helper to normalize a raw flex reading into [0,1] using FLEX_MIN/MAX.
 inline float normalizeFlexRaw(int idx, int raw) {
