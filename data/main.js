@@ -469,6 +469,33 @@ let predRateInterval = null;
 let lastPredTime = Date.now();
 let historyItems = [];
 const MAX_HISTORY = 20;
+let voiceEnabled = false;
+let lastSpoken = '';
+let speakCooldownMs = 1500; // minimal delay between speeches
+let lastSpeakTime = 0;
+
+function speakText(text) {
+    try {
+        if (!voiceEnabled) return;
+        if (!text || text === 'unknown') return;
+        const now = Date.now();
+        if (text === lastSpoken && (now - lastSpeakTime) < speakCooldownMs) return;
+        // Use Web Speech API
+        const utter = new SpeechSynthesisUtterance(text);
+        // Prefer a neutral English voice if available
+        const voices = window.speechSynthesis.getVoices();
+        const enVoice = voices.find(v => /en/i.test(v.lang));
+        if (enVoice) utter.voice = enVoice;
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+        window.speechSynthesis.cancel(); // stop any ongoing speech to avoid overlap
+        window.speechSynthesis.speak(utter);
+        lastSpoken = text;
+        lastSpeakTime = now;
+    } catch (e) {
+        console.warn('Speech synthesis error:', e);
+    }
+}
 
 // DOM elements
 const elements = {
@@ -600,6 +627,7 @@ function handleData(data) {
                 elements.gestureName.textContent = data.sentence;
                 predCount++;
                 addToHistory(data.sentence);
+                speakText(data.sentence);
                 
                 const confidence = data.confidence ? data.confidence * 100 : 0;
                 updateConfidence(confidence);
@@ -627,6 +655,7 @@ function handleData(data) {
             elements.gestureName.textContent = data.label;
             predCount++;
             addToHistory(data.label);
+            speakText(data.label);
             
             // Calculate confidence (inverse of meanD, normalized)
             const confidence = data.meanD ? Math.max(0, Math.min(100, 100 - data.meanD * 10)) : 0;
@@ -811,6 +840,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // Add mode button handlers
     const gestureBtn = document.getElementById('gestureBtn');
     const sentenceBtn = document.getElementById('sentenceBtn');
+    const voiceToggle = document.getElementById('voiceToggle');
     
     if (gestureBtn) {
         gestureBtn.addEventListener('click', switchToGestureMode);
@@ -818,6 +848,17 @@ window.addEventListener('DOMContentLoaded', () => {
     
     if (sentenceBtn) {
         sentenceBtn.addEventListener('click', switchToSentenceMode);
+    }
+    if (voiceToggle) {
+        voiceToggle.addEventListener('change', (e) => {
+            voiceEnabled = !!e.target.checked;
+            if (voiceEnabled) {
+                // Warm up voices list
+                const _ = window.speechSynthesis.getVoices();
+            } else {
+                window.speechSynthesis.cancel();
+            }
+        });
     }
     
     // Start in gesture mode (default)
