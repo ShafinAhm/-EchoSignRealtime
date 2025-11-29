@@ -1,34 +1,44 @@
 # EchoSignRealtime
 
-A real-time gesture recognition system using KNN machine learning model for sign language detection.
+Real-time gesture and sentence recognition for a wearable sign glove. Firmware runs a lightweight KNN model (float and quantized int8) and streams predictions to a Web UI with optional text-to-speech.
 
 ## Project Overview
 
-This project implements real-time gesture recognition using an accelerometer/gyroscope sensor with a KNN (k-Nearest Neighbors) model for classifying hand gestures and sign language movements.
+This project implements real-time recognition using flex sensors and IMU (accelerometer/gyroscope). A KNN (k-Nearest Neighbors) classifier operates on standardized feature windows. Two modes are supported:
+- Gesture mode: continuous single-frame classifications
+- Sentence mode: 4-second windows aggregated, standardized, then classified
 
 ## Directory Structure
 
-- **src/**: Main source code for the firmware
+- **src/**: Main firmware sources
   - `main.cpp`: Main application entry point
   - `predictor.h`: Gesture prediction logic
-  - `knn_runtime.h`: KNN model runtime implementation
-  - `glove_knn_model.h`: Pre-trained KNN model
-  - `scaler_params.h`: Feature scaling parameters
-  - `label_names.h`: Gesture class labels
-  - `calib.h`: Calibration settings
+  - `knn_runtime.h`: KNN runtime (distance, voting)
+  - `glove_knn_model.h`: Gesture KNN model (float)
+  - `scaler_params.h`: Gesture scaler (means/scales)
+  - `label_names.h`: Gesture labels
+  - `calib.h` and `include/Calib.h`: Calibration
+  - `sentence_predictor.h`: Sentence prediction pipeline (4-second windows)
+  - `sentence_knn_model.cpp` / `sentence_knn_model.h`: Sentence KNN (float)
+  - `sentence_knn_model_q.h`: Sentence KNN (quantized int8 data + scales)
+  - `sentence_scaler_params.h`: Sentence scaler (means/scales)
+  - `sentence_label_names.h`: Sentence labels
 
-- **data/**: Raw data and dataset files
-  - `dataset.csv`: Combined training dataset
-  - `raw_*.txt`: Raw sensor data files for different gestures
-  - `index.html`, `main.js`, `style.css`: Web UI files
+- **data/**: Dataset and Web UI assets
+  - `dataset.csv`: Combined gesture training dataset
+  - `raw_*.txt`: Raw gesture sensor logs
+  - `sentence_raw_*.txt`: Raw sentence windows (4-second) logs
+  - `index.html`, `main.js`, `style.css`: Web UI (3D hand, status, TTS)
 
-- **tools/**: Python utility scripts
-  - `collect_gesture_data.py`: Data collection tool
-  - `train_knn.py`: KNN model training
-  - `parse_and_train.py`: Data parsing and model training
-  - `merge_logs.py`: Log file merging utility
-  - `extract_calib_from_dump.py`: Calibration extraction
-  - `web_ui.py`: Web interface server
+- **tools/**: Python utilities
+  - `collect_gesture_data.py`: Collect gesture samples
+  - `collect_sentence_data.py`: Collect sentence windows (4s recordings)
+  - `train_knn.py`: Train gesture KNN
+  - `train_sentence_knn.py`: Train sentence KNN (float + int8 export)
+  - `parse_and_train.py`: Parse and train convenience script
+  - `merge_logs.py`: Merge text logs
+  - `extract_calib_from_dump.py`: Extract calibration
+  - `web_ui.py`: Flask server + serial bridge
 
 - **include/**: Header files
 - **lib/**: Library files
@@ -38,29 +48,42 @@ This project implements real-time gesture recognition using an accelerometer/gyr
 
 ### Prerequisites
 
-- Python 3.x
-- PlatformIO (for firmware compilation)
-- Required Python packages (see tools directory)
+- Python 3.10+
+- PlatformIO (ESP32/Arduino toolchain)
+- Recommended: VS Code + PlatformIO extension
+- Python packages: `flask`, `numpy`, `scikit-learn`, `pandas` (install as needed)
 
 ### Data Collection
 
-Collect gesture data using the data collection tool:
+Collect gesture samples:
 
-```bash
+```powershell
 python tools/collect_gesture_data.py
+```
+
+Collect sentence samples (4-second windows). Add 10 windows per new sentence, and at least 20 windows for `Rest` to improve rejection:
+
+```powershell
+python tools/collect_sentence_data.py
 ```
 
 ### Model Training
 
-Train the KNN model from collected data:
+Train gesture KNN from `data/dataset.csv`:
 
-```bash
+```powershell
 python tools/train_knn.py data/dataset.csv
 ```
 
-Or parse and train in one step:
+Train sentence KNN (exports float and quantized int8 headers used by firmware):
 
-```bash
+```powershell
+python tools/train_sentence_knn.py
+```
+
+Parse and train in one step (optional):
+
+```powershell
 python tools/parse_and_train.py
 ```
 
@@ -68,48 +91,71 @@ python tools/parse_and_train.py
 
 Start the web interface:
 
-```bash
+```powershell
 python tools/web_ui.py
 ```
 
-The web UI will be available at `http://localhost:5000`
+Open `http://localhost:5000`.
 
-### Firmware Compilation
+Key features:
+- 3D hand visualization driven by live flex/IMU data
+- Connection status, confidence bar, recent history
+- Mode buttons: `Gesture` and `Sentence`
+- Voice toggle: enable text-to-speech for predictions (speaks once per change)
 
-Build and upload the firmware using PlatformIO:
+Sentence mode operation:
+- Each trigger records 4 seconds + 0.5s gap
+- Auto-triggers every 4.5s while in sentence mode
+- Displays predicted sentence, confidence, and mean Manhattan distance
 
-```bash
-pio build
-pio upload
+### Build & Upload (ESP32)
+
+Using PlatformIO tasks (VS Code):
+- `Run Web UI`: starts Flask server
+- `Run Data Collection`: collect samples
+- `Train KNN Model`: trains gesture KNN
+- `Parse and Train`: convenience training
+- `Merge Logs`: utility
+
+CLI upload:
+
+```powershell
+C:\Users\88018\.platformio\penv\Scripts\platformio.exe run --target upload --upload-port COM15
 ```
 
-## Supported Gestures
+Adjust `--upload-port` to your COM port.
 
-The system recognizes the following gestures:
-- One
-- Two
-- Three
-- Four
-- Five
-- Rest
-- Mid
-- Fuck you (offensive gesture detection)
+## Supported Labels
+
+- Gestures: One, Two, Three, Four, Five, Rest, Mid, etc.
+- Sentences: Configurable; add new sentences by collecting `sentence_raw_*.txt` and retraining
 
 ## Key Features
 
-- Real-time gesture recognition
-- KNN-based classification
-- Web interface for visualization
-- Calibration support
-- Feature scaling for improved accuracy
+- Real-time recognition (gesture + sentence modes)
+- KNN classification: Manhattan distance, distance-weighted voting, K=3/5
+- Feature standardization via exported scaler params
+- Quantized int8 sentence model to reduce flash footprint
+- Rejection threshold via mean distance (tunable)
+- Web UI with 3D visualization and optional TTS
+
+## Threshold Tuning (Sentence Mode)
+
+- The predictor computes mean Manhattan distance for the KNN neighbors.
+- Rejection threshold (`REJECTION_MEAN_DISTANCE`) overrides predictions to `Rest` when meanD exceeds the threshold.
+- After switching to int8 quantization, distances scale up; set a higher threshold accordingly.
+- Recommended workflow:
+  - Log `meanD` during runtime (debug output) and collect stats.
+  - Set the threshold above typical in-class meanD and below off-distribution values.
 
 ## Project Configuration
 
-See `platformio.ini` for PlatformIO configuration details.
+See `platformio.ini` for board, framework, and serial settings.
 
 ## Notes
 
-See `UPGRADE_INSTRUCTIONS.md` for upgrade and migration information.
+- See `UPGRADE_INSTRUCTIONS.md` for upgrade/migration info.
+- See `SENTENCE_MODE_GUIDE.md` for sentence workflows.
 
 ## License
 
