@@ -11,7 +11,7 @@
 // 0 = DATA COLLECTION (raw log for Python tools)
 // 1 = REAL-TIME PREDICTION (uses KNN model)
 // 3 = SENSOR CALIBRATION (prints min/max values)
-#define RUN_MODE 0
+#define RUN_MODE 1
 
 // Prediction modes (only used when RUN_MODE == 1)
 // 0 = GESTURE MODE (instant gestures)
