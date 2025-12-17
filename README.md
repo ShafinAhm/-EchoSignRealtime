@@ -185,6 +185,11 @@ See `platformio.ini` for board, framework, and serial settings.
 
 MIT License. See `LICENSE` for full text.
 
-## Author
+## Authors
 
-Tasir Mahtab Haque
+This is a collaborative project developed by:
+- **Tasir Mahtab Haque**
+- **Shafin Ahmed**
+- **Rifah Sanjida**
+- **Piyal Chakroborty**
+- **Musfiquzzaman Sorkar**
